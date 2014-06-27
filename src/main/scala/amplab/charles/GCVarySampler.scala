@@ -16,6 +16,7 @@ import org.apache.spark.charles.GCTriggeredSink
 object GCVarySampler extends NotificationListener {
     var metricsSink: GCTriggeredSink = null
     @volatile var lastExtraSize = 0L
+    @volatile var lastExtraTime = 0L
     @volatile var theArray: Array[Long] = null
     var alreadySetup = false
     private val r = new Random(42)
@@ -40,9 +41,20 @@ object GCVarySampler extends NotificationListener {
 
     private def allocateDummy(size: Int) {
         lastExtraSize = size
+        val startTime = System.nanoTime
+        /*
+        val CHUNK = 1024 * 1024 * 8
+        for (i <- 0 to (size / CHUNK)) {
+            theArray = new Array[Long](CHUNK)
+            _nativeMystery()
+            theArray = null
+        }
+        */
         theArray = new Array[Long](size)
         _nativeMystery()
         theArray = null
+        val endTime = System.nanoTime
+        lastExtraTime = endTime - startTime
     }
 
     private def sampleSize(): Int = {
@@ -65,11 +77,10 @@ object GCVarySampler extends NotificationListener {
                 notification.getUserData.asInstanceOf[CompositeData]
             )
 
-            if (metricsSink != null) {
-                metricsSink.report()
-            }
-
             if (info.getGcAction() == "end of minor GC") {
+                if (metricsSink != null) {
+                    metricsSink.report()
+                }
                 allocateDummy(sampleSize())
             }
         }

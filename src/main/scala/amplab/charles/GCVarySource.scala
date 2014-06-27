@@ -20,6 +20,9 @@ class GCVarySource extends Source {
             result.put("lastExtraSize", new Gauge[Long] {
                 override def getValue: Long = GCVarySampler.lastExtraSize
             })
+            result.put("lastExtraTime", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.lastExtraTime
+            })
             return JCollections.unmodifiableMap(result)
         }
     }
