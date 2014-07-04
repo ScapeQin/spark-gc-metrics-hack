@@ -21,6 +21,23 @@ object GCVarySampler extends NotificationListener {
     var alreadySetup = false
     private val r = new Random(42)
 
+    private def getAllocator(): DummyArrayAllocator = {
+        try {
+            val nativeCls = Class.forName(
+                "amplab.charles.NativeDummyAllocator"
+            )
+            System.err.println("GCVarySampler: Using native allocator trick")
+            System.out.println("GCVarySampler: Using native allocator trick")
+            return nativeCls.newInstance().asInstanceOf[DummyArrayAllocator]
+        } catch {
+            case cnfe: ClassNotFoundException => 
+                System.err.println("GCVarySampler: no native allocator");
+                return new SimpleDummyArrayAllocator()
+        }
+    }
+
+    private val allocator = getAllocator()
+
     def findYoungSize: Long = {
         for (pool <- ManagementFactory.getMemoryPoolMXBeans.asScala) {
             if (pool.getName == "PS Eden Space") {
@@ -50,7 +67,16 @@ object GCVarySampler extends NotificationListener {
             theArray = null
         }
         */
-        theArray = new Array[Long](size)
+        System.err.println("About to allocator.allocateLongArray: " +
+                           allocator + " " + size)
+        try {
+            theArray = allocator.allocateLongArray(size)
+        } catch {
+            case t: Throwable => 
+                System.err.println("GCVarySampler: Error in allocator: " + t)
+                throw t
+        }
+        System.err.println("Done allocator.allocateLongArray: " + theArray)
         _nativeMystery()
         theArray = null
         val endTime = System.nanoTime
@@ -62,16 +88,19 @@ object GCVarySampler extends NotificationListener {
     }
 
     def setupGCNotifications() {
+        System.err.println("In setupGCNotifications")
         assert(!alreadySetup)
         alreadySetup = true
         for (gc <- ManagementFactory.getGarbageCollectorMXBeans.asScala) {
             gc.asInstanceOf[NotificationEmitter].addNotificationListener(
                 this, null, null)
         }
+        System.err.println("Out setupGCNotifications")
     }
 
     override def handleNotification(notification: Notification,
                                     handback: AnyRef) {
+        System.err.println("In handleNotification " + notification);
         if (notification.getType == GarbageCollectionNotificationInfo.GARBAGE_COLLECTION_NOTIFICATION) {
             val info = GarbageCollectionNotificationInfo.from(
                 notification.getUserData.asInstanceOf[CompositeData]

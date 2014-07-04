@@ -67,7 +67,8 @@ class JvmStatSet extends MetricSet {
 	"sun.gc.collector.0.scanned" -> "youngScanned",
 	"sun.gc.collector.0.marked" -> "youngMarked",
 	"sun.gc.collector.0.oldMarkedForYoung" -> "oldMarkedForYoung",
-	"sun.gc.collector.0.oldScannedForYoung" -> "oldMarkedForYoung",
+	"sun.gc.collector.0.oldScannedForYoung" -> "oldScannedForYoung",
+	"sun.gc.collector.0.inOldScannedForYoung" -> "inOldScannedForYoung",
 
 	"sun.gc.collector.1.scanned" -> "oldScanned",
 	"sun.gc.collector.1.marked" -> "oldMarked"
