@@ -1,6 +1,7 @@
 package amplab.charles
 
 import java.util.Random
+import java.util.{Timer, TimerTask}
 
 import java.lang.management.ManagementFactory
 import javax.management.openmbean.CompositeData
@@ -14,12 +15,39 @@ import java.util.{Map => JMap, HashMap => JHashMap, Collections => JCollections}
 import org.apache.spark.charles.GCTriggeredSink
 
 object GCVarySampler extends NotificationListener {
-    var metricsSink: GCTriggeredSink = null
+    var metricsSink: GenericSink = null
+    @volatile var disableSampling = false
     @volatile var lastExtraSize = 0L
+    @volatile var totalExtraSize = 0L
     @volatile var lastExtraTime = 0L
+    @volatile var numAllocations = 0L
     @volatile var theArray: Array[Long] = null
+    @volatile var heapDumpInterval = -1L
+    @volatile var lastHeapDump = 0L
+    @volatile var forceFullAfter = 0
+    @volatile var sinceForceFull = 0
+    @volatile var nextForceFull = 0
+    @volatile var sameSampleRange = 4
+    @volatile var forceFullPoisson = false
+    @volatile var sampleHalf = false
     var alreadySetup = false
     private val r = new Random(42)
+    private var heapDumpTimer: Timer = null
+
+    disableSampling = System.getProperty(
+        "amplab.charles.gcVary.disable", "false") == "true"
+
+    heapDumpInterval = System.getProperty(
+        "amplab.charles.gcVary.heapDumpInterval", "-1").toLong
+
+    forceFullAfter = System.getProperty(
+        "amplab.charles.gcVary.forceFullAfter", "0").toInt
+
+    forceFullPoisson = System.getProperty(
+        "amplab.charles.gcVary.forceFullPoisson", "true") == "true"
+
+    sampleHalf = System.getProperty(
+        "amplab.charles.gcVary.sampleHalf", "false") == "true"
 
     private def getAllocator(): DummyArrayAllocator = {
         try {
@@ -56,8 +84,14 @@ object GCVarySampler extends NotificationListener {
 
     val maxYoungSize = findYoungSize / 8L
 
-    private def allocateDummy(size: Int) {
-        lastExtraSize = size
+    private def allocateDummy(_size: Int) {
+        var size = _size
+        if (size < 0) {
+            size = lastExtraSize.asInstanceOf[Int]
+        } else {
+            lastExtraSize = size
+        }
+        totalExtraSize += size
         val startTime = System.nanoTime
         /*
         val CHUNK = 1024 * 1024 * 8
@@ -77,6 +111,7 @@ object GCVarySampler extends NotificationListener {
                 throw t
         }
         System.err.println("Done allocator.allocateLongArray: " + theArray)
+        numAllocations += 1
         _nativeMystery()
         theArray = null
         val endTime = System.nanoTime
@@ -96,6 +131,31 @@ object GCVarySampler extends NotificationListener {
                 this, null, null)
         }
         System.err.println("Out setupGCNotifications")
+
+        if (heapDumpInterval > 0L) {
+            heapDumpTimer = new Timer("GCVarySampler heap dump timer", true)
+            heapDumpTimer.scheduleAtFixedRate(new TimerTask {
+                override def run: Unit = {
+                    System.err.println("Producing heap histogram")
+                    val filename = "heapHistogram-" + System.currentTimeMillis
+                    HeapHistogram.selfHistogramToFile(filename)
+                    lastHeapDump = System.currentTimeMillis
+                }
+            }, 300L * 1000L, heapDumpInterval * 1000L)
+            System.err.println("Setup heap histogram taker...")
+        }
+    }
+
+    private def generatePoisson(mean: Int): Int = {
+        val L = Math.exp(-mean)
+        var k = 0
+        var p = 1.0
+        while (p > L) {
+            k += 1
+            val u = r.nextDouble
+            p *= u
+        }
+        return k - 1
     }
 
     override def handleNotification(notification: Notification,
@@ -105,12 +165,31 @@ object GCVarySampler extends NotificationListener {
             val info = GarbageCollectionNotificationInfo.from(
                 notification.getUserData.asInstanceOf[CompositeData]
             )
-
+            if (metricsSink != null) {
+                metricsSink.report()
+            }
             if (info.getGcAction() == "end of minor GC") {
-                if (metricsSink != null) {
-                    metricsSink.report()
+                if (!disableSampling) {
+                    if (forceFullAfter > 0 && 
+                        (sinceForceFull < sameSampleRange ||
+                         sinceForceFull >= forceFullAfter - sameSampleRange)) {
+                        allocateDummy(-1)
+                    } else {
+                        allocateDummy(sampleSize())
+                    }
                 }
-                allocateDummy(sampleSize())
+                if (forceFullAfter > 0) {
+                    sinceForceFull += 1
+                    if (sinceForceFull >= forceFullAfter) {
+                        sinceForceFull = 0
+                        if (forceFullPoisson) {
+                            nextForceFull = generatePoisson(forceFullAfter)
+                        } else {
+                            nextForceFull = forceFullAfter
+                        }
+                        System.gc()
+                    }
+                }
             }
         }
     }

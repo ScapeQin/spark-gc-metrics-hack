@@ -48,6 +48,22 @@
        <scope>system</scope>
        <systemPath>${java.home}/../lib/tools.jar</systemPath>
      </dependency>
+
+     <dependency>
+       <groupId>sun.jdk</groupId>
+       <artifactId>sa-jdi</artifactId>
+       <version>1.5.0</version>
+       <scope>system</scope>
+       <systemPath>${java.home}/../lib/sa-jdi.jar</systemPath>
+     </dependency>
+
+     <dependency>
+       <groupId>dacapobench</groupId>
+       <artifactId>decapobench-jar</artifactId>
+       <version>0.0</version>
+       <scope>system</scope>
+       <systemPath>${user.dir}/lib/dacapobench.jar</systemPath>
+     </dependency>
   </dependencies>
 
   <build>
@@ -86,6 +102,29 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>2.3</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <artifactSet>
+                <includes>
+                  <include>org.scala-lang:scala-library</include>
+                  <include>com.codahale.metrics:*</include>
+                  <include>com.fasterxml.jackson.*:*</include>
+                </includes>
+              </artifactSet>
+              <finalName>dacapo-extra-metrics</finalName>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin> 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>

@@ -20,8 +20,29 @@ class GCVarySource extends Source {
             result.put("lastExtraSize", new Gauge[Long] {
                 override def getValue: Long = GCVarySampler.lastExtraSize
             })
+            result.put("totalExtraSize", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.totalExtraSize
+            })
             result.put("lastExtraTime", new Gauge[Long] {
                 override def getValue: Long = GCVarySampler.lastExtraTime
+            })
+            result.put("disableSampling", new Gauge[Boolean] {
+                override def getValue: Boolean = GCVarySampler.disableSampling
+            })
+            result.put("heapDumpInterval", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.heapDumpInterval
+            })
+            result.put("lastHeapDump", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.lastHeapDump
+            })
+            result.put("forceFullAfter", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.forceFullAfter
+            })
+            result.put("sinceForceFull", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.sinceForceFull
+            })
+            result.put("numAllocations", new Gauge[Long] {
+                override def getValue: Long = GCVarySampler.numAllocations
             })
             return JCollections.unmodifiableMap(result)
         }

@@ -16,9 +16,10 @@ import com.fasterxml.jackson.databind.ObjectMapper
 
 import java.util.concurrent.TimeUnit
 
-import amplab.charles.GCVarySampler
+import amplab.charles.{GCVarySampler, GenericSink}
 
-class GCTriggeredSink(val properties: Properties, val registry: MetricRegistry, val secManager: SecurityManager) extends Sink {
+class GCTriggeredSink(val properties: Properties, val registry: MetricRegistry, val secManager: SecurityManager) extends Sink 
+    with GenericSink {
   val mapper = new ObjectMapper().registerModule(
     new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true))
 

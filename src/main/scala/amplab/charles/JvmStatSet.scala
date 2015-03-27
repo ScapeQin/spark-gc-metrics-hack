@@ -69,9 +69,35 @@ class JvmStatSet extends MetricSet {
 	"sun.gc.collector.0.oldMarkedForYoung" -> "oldMarkedForYoung",
 	"sun.gc.collector.0.oldScannedForYoung" -> "oldScannedForYoung",
 	"sun.gc.collector.0.inOldScannedForYoung" -> "inOldScannedForYoung",
+	"sun.gc.collector.0.inOldBytesScannedForYoung" -> "inOldBytesScannedForYoung",
+	"sun.gc.collector.0.inOldCardsScannedForYoung" -> "inOldCardsScannedForYoung",
+	"sun.gc.collector.0.inOldCardsFoundForYoung" -> "inOldCardsFoundForYoung",
+	"sun.gc.collector.0.oldToYoungPointers" -> "oldToYoungPointers",
+	
+        "sun.gc.collector.0.goodInOldScannedForYoung" -> "goodInOldScannedForYoung",
+        "sun.gc.collector.0.bogusCards" -> "bogusCards",
+        "sun.gc.collector.0.oneObjectCardRanges" -> "oneObjectCardRanges",
+        
+        "sun.gc.collector.0.smallInOldScannedForYoung" -> "smallInOldScannedForYoung",
+        "sun.gc.collector.0.smallGoodInOldScannedForYoung" -> "smallGoodInOldScannedForYoung",
+        "sun.gc.collector.0.smallBytesInOldScannedForYoung" -> "smallBytesInOldScannedForYoung",
+	"sun.gc.collector.0.bytesPretenured" -> "bytesPretenured0",
+	"sun.gc.collector.0.edenPreGCBytes" -> "edenPreGCBytes",
 
 	"sun.gc.collector.1.scanned" -> "oldScanned",
-	"sun.gc.collector.1.marked" -> "oldMarked"
+	"sun.gc.collector.1.marked" -> "oldMarked",
+	"sun.gc.collector.1.bytesPretenured" -> "bytesPretenured",
+
+        /* JDK 7
+        "sun.gc.generation.2.space.0.used" -> "permUsed",
+        "sun.gc.generation.2.space.0.capacity" -> "permCapacity",
+        "sun.gc.generation.2.capacity" -> "permCapacityTop",
+        */
+        
+        /* JDK 8 */
+        "sun.gc.metaspace.used" -> "metaUsed",
+        "sun.gc.metaspace.capacity" -> "metaCapacity",
+        "sun.gc.metaspace.maxCapacity" -> "metaMaxCapacity"
     )
 
     val NUMBER_MONITORS = NUMBER_FIELDS.map { case (k, v) => makeMonitor(k) -> v }
@@ -82,6 +108,13 @@ class JvmStatSet extends MetricSet {
     )
 
     val TIME_MONITORS = TIME_FIELDS.map { case (k, v) => makeMonitor(k) -> v }
+
+    val STRING_FIELDS = List(
+        "sun.gc.cause" -> "gcCause",
+        "sun.gc.lastCause" -> "lastGCCause"
+    )
+
+    val STRING_MONITORS = STRING_FIELDS.map { case (k, v) => makeMonitor(k) -> v }
 
     override def getMetrics: JMap[String, Metric] = {
         val result = new JHashMap[String, Metric]
@@ -97,6 +130,11 @@ class JvmStatSet extends MetricSet {
                 override def getValue: Double = {
                     monitor.getValue.asInstanceOf[Long] / (timerFreq / 1000.0)
                 }
+            })
+        }
+        for ((monitor, label) <- STRING_MONITORS) {
+            result.put(label, new Gauge[String] {
+                override def getValue: String = monitor.getValue.asInstanceOf[String]
             })
         }
         return JCollections.unmodifiableMap(result)
