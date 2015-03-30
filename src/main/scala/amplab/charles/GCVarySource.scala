@@ -44,6 +44,12 @@ class GCVarySource extends Source {
             result.put("numAllocations", new Gauge[Long] {
                 override def getValue: Long = GCVarySampler.numAllocations
             })
+            result.put("sampleHalf", new Gauge[Boolean] {
+                override def getValue: Boolean = GCVarySampler.sampleHalf
+            })
+            result.put("haveNativeAllocator", new Gauge[Boolean] {
+                override def getValue: Boolean = GCVarySampler.haveNativeAllocator
+            })
             return JCollections.unmodifiableMap(result)
         }
     }

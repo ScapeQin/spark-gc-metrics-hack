@@ -10,7 +10,7 @@ import org.apache.spark.metrics.sink.Sink
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.SecurityManager
 
-import java.io.FileOutputStream
+import java.io.{BufferedOutputStream, FileOutputStream}
 
 import com.fasterxml.jackson.databind.ObjectMapper
 
@@ -30,7 +30,8 @@ class GCTriggeredSink(val properties: Properties, val registry: MetricRegistry, 
     case None => "./gc-metrics-json"
   }
 
-  var outputStream = new FileOutputStream(outputFile)
+  // buffer to lower logging overhead at the cost of speed.
+  var outputStream = new BufferedOutputStream(new FileOutputStream(outputFile))
   val generator = mapper.getFactory().createGenerator(outputStream)
 
   def report(): Unit = {

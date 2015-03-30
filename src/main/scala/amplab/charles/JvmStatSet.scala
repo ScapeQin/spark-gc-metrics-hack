@@ -5,7 +5,7 @@ import com.codahale.metrics.{Gauge, Metric, MetricSet}
 import java.util.{Map => JMap, HashMap => JHashMap, Collections => JCollections}
 import sun.jvmstat.monitor.{Monitor, MonitoredHost, VmIdentifier}
 
-class JvmStatSet extends MetricSet {
+class JvmStatSet(val isMinimal: Boolean = false) extends MetricSet {
     val selfVmId = new VmIdentifier("local://0@localhost");
     val thisVmMonitor = MonitoredHost.getMonitoredHost(selfVmId).getMonitoredVm(selfVmId);
 
@@ -14,6 +14,19 @@ class JvmStatSet extends MetricSet {
     private def makeMonitor(target: String): Monitor = {
         return thisVmMonitor.findByName(target)
     }
+
+    val MINIMAL_SET = Set(
+        "youngEdenCapacity",
+        "promoted",
+        "youngGcCount",
+        "fullGcCount",
+        "youngGcMsec",
+        "fullGcMsec",
+        "oldGenUsed",
+        "edenPreGCBytes",
+        "metaUsed",
+        "metaCapacity"
+    )
 
     val NUMBER_FIELDS = List(
         "sun.gc.policy.tenuringThreshold" -> "tenuringThreshold",
@@ -137,6 +150,19 @@ class JvmStatSet extends MetricSet {
                 override def getValue: String = monitor.getValue.asInstanceOf[String]
             })
         }
-        return JCollections.unmodifiableMap(result)
+        if (isMinimal) {
+            val realResult = new JHashMap[String, Metric]
+            for (k <- MINIMAL_SET) {
+                val item = result.get(k)
+                if (item != null) {
+                    realResult.put(k, result.get(k))
+                } else {
+                    System.err.println("JvmStatSet: Could not find " + k)
+                }
+            }
+            return JCollections.unmodifiableMap(realResult)
+        } else {
+            return JCollections.unmodifiableMap(result)
+        }
     }
 }

@@ -20,6 +20,7 @@ object GCVarySampler extends NotificationListener {
     @volatile var lastExtraSize = 0L
     @volatile var totalExtraSize = 0L
     @volatile var lastExtraTime = 0L
+    @volatile var haveNativeAllocator = false
     @volatile var numAllocations = 0L
     @volatile var theArray: Array[Long] = null
     @volatile var heapDumpInterval = -1L
@@ -56,10 +57,12 @@ object GCVarySampler extends NotificationListener {
             )
             System.err.println("GCVarySampler: Using native allocator trick")
             System.out.println("GCVarySampler: Using native allocator trick")
+            haveNativeAllocator = true
             return nativeCls.newInstance().asInstanceOf[DummyArrayAllocator]
         } catch {
             case cnfe: ClassNotFoundException => 
                 System.err.println("GCVarySampler: no native allocator");
+                haveNativeAllocator = false
                 return new SimpleDummyArrayAllocator()
         }
     }
@@ -119,7 +122,12 @@ object GCVarySampler extends NotificationListener {
     }
 
     private def sampleSize(): Int = {
-        return r.nextInt(maxYoungSize.asInstanceOf[Int])
+        if (!sampleHalf) {
+            System.err.println("NO SAMPLE HALF")
+            return r.nextInt(maxYoungSize.asInstanceOf[Int])
+        } else {
+            return maxYoungSize.asInstanceOf[Int] / 2 + r.nextInt(maxYoungSize.asInstanceOf[Int] / 2)
+        }
     }
 
     def setupGCNotifications() {
