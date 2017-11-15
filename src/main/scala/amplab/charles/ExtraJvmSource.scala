@@ -1,9 +1,9 @@
 package amplab.charles
 
 import com.codahale.metrics.MetricRegistry
-import org.apache.spark.metrics.source.Source
+import org.apache.spark.charles.SourceWrapper
 
-class ExtraJvmSource extends Source {
+class ExtraJvmSource extends SourceWrapper {
     val sourceName = "extraJvm"
     val metricRegistry = new MetricRegistry()
 

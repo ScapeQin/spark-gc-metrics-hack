@@ -16,6 +16,7 @@ import org.apache.spark.charles.GCTriggeredSink
 
 object GCVarySampler extends NotificationListener {
     var metricsSink: GenericSink = null
+
     @volatile var disableSampling = false
     @volatile var lastExtraSize = 0L
     @volatile var totalExtraSize = 0L
@@ -23,6 +24,7 @@ object GCVarySampler extends NotificationListener {
     @volatile var haveNativeAllocator = false
     @volatile var numAllocations = 0L
     @volatile var theArray: Array[Long] = null
+    @volatile var extraArray: Array[Array[Long]] = new Array[Array[Long]](16)
     @volatile var heapDumpInterval = -1L
     @volatile var lastHeapDump = 0L
     @volatile var forceFullAfter = 0
@@ -31,6 +33,7 @@ object GCVarySampler extends NotificationListener {
     @volatile var sameSampleRange = 4
     @volatile var forceFullPoisson = false
     @volatile var sampleHalf = false
+    @volatile var sampleEmbedded = false
     var alreadySetup = false
     private val r = new Random(42)
     private var heapDumpTimer: Timer = null
@@ -50,6 +53,13 @@ object GCVarySampler extends NotificationListener {
     sampleHalf = System.getProperty(
         "amplab.charles.gcVary.sampleHalf", "false") == "true"
 
+    sampleEmbedded = System.getProperty(
+        "amplab.charles.gcVary.sampleEmbedded", "false") == "true"
+
+    if (sampleEmbedded) {
+        disableSampling = true
+    }
+
     private def getAllocator(): DummyArrayAllocator = {
         try {
             val nativeCls = Class.forName(
@@ -61,7 +71,7 @@ object GCVarySampler extends NotificationListener {
             return nativeCls.newInstance().asInstanceOf[DummyArrayAllocator]
         } catch {
             case cnfe: ClassNotFoundException => 
-                System.err.println("GCVarySampler: no native allocator");
+                System.err.println("GCVarySampler: no native allocator: cnfe = " + cnfe);
                 haveNativeAllocator = false
                 return new SimpleDummyArrayAllocator()
         }
@@ -87,7 +97,7 @@ object GCVarySampler extends NotificationListener {
 
     val maxYoungSize = findYoungSize / 8L
 
-    private def allocateDummy(_size: Int) {
+    private def allocateDummy(_size: Long) {
         var size = _size
         if (size < 0) {
             size = lastExtraSize.asInstanceOf[Int]
@@ -96,6 +106,7 @@ object GCVarySampler extends NotificationListener {
         }
         totalExtraSize += size
         val startTime = System.nanoTime
+        val MAX_SIZE = 2L * 1024L * 1024L * 1024L
         /*
         val CHUNK = 1024 * 1024 * 8
         for (i <- 0 to (size / CHUNK)) {
@@ -106,8 +117,15 @@ object GCVarySampler extends NotificationListener {
         */
         System.err.println("About to allocator.allocateLongArray: " +
                            allocator + " " + size)
+        var i = 0
         try {
-            theArray = allocator.allocateLongArray(size)
+            while (size > MAX_SIZE) {
+                extraArray(i) = allocator.allocateLongArray(MAX_SIZE.toInt)
+                size -= MAX_SIZE
+                i += 1
+                System.err.println("Allocating extra array")
+            }
+            theArray = allocator.allocateLongArray(size.toInt)
         } catch {
             case t: Throwable => 
                 System.err.println("GCVarySampler: Error in allocator: " + t)
@@ -117,28 +135,31 @@ object GCVarySampler extends NotificationListener {
         numAllocations += 1
         _nativeMystery()
         theArray = null
+        while (i > 0) {
+            extraArray(i) = null
+            i -= 1
+        }
         val endTime = System.nanoTime
         lastExtraTime = endTime - startTime
     }
 
-    private def sampleSize(): Int = {
+    private def sampleSize(): Long = {
         if (!sampleHalf) {
             System.err.println("NO SAMPLE HALF")
-            return r.nextInt(maxYoungSize.asInstanceOf[Int])
+            return r.nextLong() % maxYoungSize
         } else {
-            return maxYoungSize.asInstanceOf[Int] / 2 + r.nextInt(maxYoungSize.asInstanceOf[Int] / 2)
+            return maxYoungSize / 2L + r.nextLong() % (maxYoungSize.asInstanceOf[Int] / 2L)
         }
     }
 
     def setupGCNotifications() {
-        System.err.println("In setupGCNotifications")
+        System.err.println("GCVarySampler: In setupGCNotifications: alreadySetup=" + alreadySetup + "; " +
+                           "disableSampling=" + disableSampling)
         assert(!alreadySetup)
-        alreadySetup = true
         for (gc <- ManagementFactory.getGarbageCollectorMXBeans.asScala) {
             gc.asInstanceOf[NotificationEmitter].addNotificationListener(
                 this, null, null)
         }
-        System.err.println("Out setupGCNotifications")
 
         if (heapDumpInterval > 0L) {
             heapDumpTimer = new Timer("GCVarySampler heap dump timer", true)
@@ -152,6 +173,25 @@ object GCVarySampler extends NotificationListener {
             }, 300L * 1000L, heapDumpInterval * 1000L)
             System.err.println("Setup heap histogram taker...")
         }
+
+        if (sampleEmbedded) {
+            disableSampling = true
+            System.err.println("GCVarySampler: sampleEmbedded=true")
+            try {
+                val jniTricksClass = Class.forName("amplab.charles.JniTricks")
+                val setupSamplingPolicyMethod = jniTricksClass.getMethod("setupSamplingPolicy", classOf[Long], classOf[Long])
+                val youngSize = findYoungSize
+                setupSamplingPolicyMethod.invoke(null, 0L.asInstanceOf[java.lang.Long], youngSize.asInstanceOf[java.lang.Long])
+            } catch {
+                case (t: java.lang.Throwable) =>
+                    System.err.println("GCVarySampler: problem calling setupSamplingPolicy: " + t)
+                    t.printStackTrace()
+            }
+        } else {
+            System.err.println("GCVarySampler: sampleEmbedded=false")
+        }
+        System.err.println("GCVarySampler: Out setupGCNotifications")
+        alreadySetup = true
     }
 
     private def generatePoisson(mean: Int): Int = {
@@ -181,7 +221,7 @@ object GCVarySampler extends NotificationListener {
                     if (forceFullAfter > 0 && 
                         (sinceForceFull < sameSampleRange ||
                          sinceForceFull >= forceFullAfter - sameSampleRange)) {
-                        allocateDummy(-1)
+                        allocateDummy(-1L)
                     } else {
                         allocateDummy(sampleSize())
                     }

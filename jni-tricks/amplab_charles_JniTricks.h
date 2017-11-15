@@ -15,6 +15,14 @@ extern "C" {
 JNIEXPORT jlongArray JNICALL Java_amplab_charles_JniTricks_allocateUninitializedLongArray
   (JNIEnv *, jclass, jint);
 
+/*
+ * Class:     amplab_charles_JniTricks
+ * Method:    setupSamplingPolicy
+ * Signature: (JJ)V
+ */
+JNIEXPORT void JNICALL Java_amplab_charles_JniTricks_setupSamplingPolicy
+  (JNIEnv *, jclass, jlong, jlong);
+
 #ifdef __cplusplus
 }
 #endif

@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>edu.berkeley.cs.charles</groupId>
   <artifactId>extra-spark-metrics</artifactId>
-  <version>0.0-SNAPSHOT</version>
+  <version>0.1-SNAPSHOT</version>
   <name>${project.artifactId}</name>
   <description>Extra metrics packages for spark</description>
   <inceptionYear>2013</inceptionYear>
@@ -17,9 +17,10 @@
     <maven.compiler.target>1.5</maven.compiler.target>
     <java.version>1.5</java.version>
     <encoding>UTF-8</encoding>
-    <scala.version>2.10.3</scala.version>
+    <scala.version>2.10.4</scala.version>
     <scala.binary.version>2.10</scala.binary.version>
-    <spark.version>1.0.0-cr-SNAPSHOT</spark.version>
+    <!-- <spark.version>1.4.0-cr-SNAPSHOT</spark.version> -->
+    <spark.version>1.4.0</spark.version>
   </properties>
 
   <dependencies>
@@ -65,19 +66,111 @@
        <systemPath>${user.dir}/lib/dacapobench.jar</systemPath>
      </dependency>
   </dependencies>
+  
+  <profiles>
+    <profile>
+      <id>bench-package</id>
+      <dependencies>
+        <dependency>
+          <groupId>com.codahale.metrics</groupId>
+          <artifactId>metrics-json</artifactId>
+          <version>3.0.0</version>
+        </dependency>
+      </dependencies>
+      
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>2.3</version>
+            <executions>
+              <execution>
+                <id>bench-shade</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <artifactSet>
+                    <includes>
+                      <!-- <include>org.scala-lang:scala-library</include> -->
+                      <include>com.codahale.metrics:*</include>
+                      <include>com.fasterxml.jackson.*:*</include>
+                    </includes>
+                  </artifactSet>
+                  <finalName>standalone-gc-metrics</finalName>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins> 
+      </build>
+
+    </profile>
+    <profile>
+      <id>dacapobench</id>
+      <dependencies>
+        <dependency>
+          <groupId>dacapobench</groupId>
+          <artifactId>decapobench-jar</artifactId>
+          <version>0.0</version>
+          <scope>system</scope>
+          <systemPath>${user.dir}/lib/dacapobench.jar</systemPath>
+        </dependency>
+      </dependencies>
+    
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>net.alchim31.maven</groupId>
+            <artifactId>scala-maven-plugin</artifactId>
+            <configuration>
+              <sources><source>src/main/scala</source><source>src/dacapo/scala</source></sources>
+            </configuration>
+          </plugin>
+       
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>2.3</version>
+            <executions>
+              <execution>
+                <id>dacapo-shape</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <artifactSet>
+                    <includes>
+                      <include>org.scala-lang:scala-library</include>
+                      <include>com.codahale.metrics:*</include>
+                      <include>com.fasterxml.jackson.*:*</include>
+                    </includes>
+                  </artifactSet>
+                  <finalName>dacapo-extra-metrics</finalName>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins> 
+      </build>
+    </profile>
+  </profiles>
+
 
   <build>
-    <sourceDirectory>src/main/scala</sourceDirectory>
-    <testSourceDirectory>src/test/scala</testSourceDirectory>
     <plugins>
       <plugin>
         <!-- see http://davidb.github.com/scala-maven-plugin -->
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
-        <version>3.1.3</version>
+        <version>3.2.1</version>
         <executions>
           <execution>
             <goals>
+              <goal>add-source</goal>
               <goal>compile</goal>
               <goal>testCompile</goal>
             </goals>
@@ -85,9 +178,6 @@
               <scalaVersion>${scala.version}</scalaVersion>
               <recompileMode>incremental</recompileMode>
               <args>
-                <arg>-make:transitive</arg>
-                <arg>-dependencyfile</arg>
-                <arg>${project.build.directory}/.scala_dependencies</arg>
                 <arg>-deprecation</arg>
                 <arg>-deprecation</arg>
                 <arg>-optimise</arg>
@@ -102,29 +192,6 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>2.3</version>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <artifactSet>
-                <includes>
-                  <include>org.scala-lang:scala-library</include>
-                  <include>com.codahale.metrics:*</include>
-                  <include>com.fasterxml.jackson.*:*</include>
-                </includes>
-              </artifactSet>
-              <finalName>dacapo-extra-metrics</finalName>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin> 
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
